@@ -1,0 +1,12 @@
+# Archivos compilados
+*.exe
+*.out
+*.o
+
+# Archivos temporales
+*.tmp
+*.log
+
+# Configuración de editores
+.vscode/
+.idea/
