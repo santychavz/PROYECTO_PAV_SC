@@ -1,35 +1,50 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <math.h>
+#include <errno.h>
+#include <windows.h>
 
-#define MEMORY_SIZE 100
+#define MEMORY_SIZE 1000
+#define PROGRAM_FILE "programa.simp"
+#define MAX_LINE 512
+#define MAX_STRING 99
+#define WORD_LIMIT 99999.0
 
-/* Codigos de operacion */
+/* Operaciones originales */
 #define READ 10
 #define WRITE 11
-
 #define LOAD 20
 #define STORE 21
-
 #define ADD 30
 #define SUBTRACT 31
 #define DIVIDE 32
 #define MULTIPLY 33
-
 #define BRANCH 40
 #define BRANCHNEG 41
 #define BRANCHZERO 42
 #define HALT 43
 
+/* Operaciones nuevas */
+#define NEWLINE 12
+#define READSTRING 13
+#define WRITESTRING 14
+#define MODULO 34
+#define POWER 35
 
-/* Prototipos */
+
 void mostrarBienvenida(void);
 
-void cargarPrograma(int memory[]);
+int cargarPrograma(double memory[]);
+int cargarDesdeArchivo(double memory[]);
+int cargarInteractivo(double memory[]);
 
-void ejecutarPrograma(int memory[]);
+void ejecutarPrograma(double memory[]);
 
 void vaciado(
-    int memory[],
-    int accumulator,
+    double memory[],
+    double accumulator,
     int instructionCounter,
     int instructionRegister,
     int operationCode,
@@ -38,134 +53,687 @@ void vaciado(
 
 void errorFatal(
     const char mensaje[],
-    int memory[],
-    int accumulator,
+    double memory[],
+    double accumulator,
     int instructionCounter,
     int instructionRegister,
     int operationCode,
     int operand
 );
 
-int leerEntero(int *valor);
+int leerLinea(char buffer[], int tam);
 
-void limpiarEntrada(void);
+int convertirNumero(
+    const char texto[],
+    double *valor
+);
+
+int esEntero(double valor);
+
+int validarRangoPalabra(double valor);
+
+void limpiarMemoria(double memory[]);
+
+int decodificarInstruccion(
+    int instruction,
+    int *operationCode,
+    int *operand
+);
+
+int opcodeValido(int operationCode);
+
+int verificarResultado(double resultado);
+
+int leerCadenaEnMemoria(
+    double memory[],
+    int base
+);
+
+int escribirCadenaDesdeMemoria(
+    double memory[],
+    int base
+);
+
+void imprimirPalabra(double valor);
+
+FILE *abrirProgramaAutomatico(
+    char rutaUsada[],
+    int tamRuta
+);
+
+void pausarPrograma(void);
 
 
-/* =========================
-   PROGRAMA PRINCIPAL
-   ========================= */
+/* ===============================
+   MAIN
+   =============================== */
 
 int main(void)
 {
-    int memory[MEMORY_SIZE] = {0};
+    double memory[MEMORY_SIZE] = {0};
+
+    int palabrasCargadas;
 
     mostrarBienvenida();
 
-    cargarPrograma(memory);
+    palabrasCargadas =
+        cargarPrograma(memory);
+
+    if (palabrasCargadas <= 0)
+    {
+        printf(
+            "\nNo se cargo ningun programa.\n"
+        );
+
+        pausarPrograma();
+
+        return 0;
+    }
 
     ejecutarPrograma(memory);
+
+    pausarPrograma();
 
     return 0;
 }
 
 
-/* =========================
-   BIENVENIDA
-   ========================= */
+/* ===============================
+   MENSAJE INICIAL
+   =============================== */
 
 void mostrarBienvenida(void)
 {
-    printf("*** Bienvenido a Simpletron! ***\n");
-    printf("** Introduzca su programa una instruccion ***\n");
-    printf("** (o palabra de datos) a la vez en la linea ***\n");
-    printf("** de texto de entrada. Yo indicare el numero ***\n");
-    printf("** de posicion y una interrogacion (?). Usted ***\n");
-    printf("** tecleara entonces la palabra para esa ***\n");
-    printf("** posicion. Escriba 9999 para terminar ***\n");
-    printf("** de introducir su programa. ***\n\n");
+    printf(
+        "*** Bienvenido a Simpletron! ***\n"
+    );
+
+    printf(
+        "** Primero se buscara el archivo programa.simp. **\n"
+    );
+
+    printf(
+        "** Si no existe, se usara la carga manual. **\n"
+    );
+
+    printf(
+        "** En modo manual escriba 9999 o 99999 para terminar. **\n\n"
+    );
 }
 
 
-/* =========================
-   CARGAR PROGRAMA
-   ========================= */
+/* ===============================
+   BUSCAR programa.simp
+   =============================== */
 
-void cargarPrograma(int memory[])
+FILE *abrirProgramaAutomatico(
+    char rutaUsada[],
+    int tamRuta
+)
 {
-    int posicion = 0;
-    int palabra;
+    FILE *archivo;
 
-    while (posicion < MEMORY_SIZE)
+    char rutaExe[MAX_PATH];
+    char carpetaExe[MAX_PATH];
+    char rutaPrograma[MAX_PATH];
+
+    char *ultimaBarra;
+
+    DWORD longitudRuta;
+
+
+    /*
+       Obtengo la ruta real del ejecutable.
+       Asi no dependo de la carpeta desde
+       donde se abrio el programa.
+    */
+
+    longitudRuta =
+        GetModuleFileNameA(
+            NULL,
+            rutaExe,
+            MAX_PATH
+        );
+
+
+    if (
+        longitudRuta == 0 ||
+        longitudRuta >= MAX_PATH
+    )
     {
-        printf("%02d ? ", posicion);
+        return NULL;
+    }
 
-        fflush(stdout);
 
-        if (!leerEntero(&palabra))
+    strcpy(
+        carpetaExe,
+        rutaExe
+    );
+
+
+    /*
+       Quito el nombre del .exe para
+       quedarme solo con su carpeta.
+    */
+
+    ultimaBarra =
+        strrchr(
+            carpetaExe,
+            '\\'
+        );
+
+
+    if (ultimaBarra != NULL)
+    {
+        *ultimaBarra = '\0';
+    }
+
+
+    /*
+       Primero busco programa.simp
+       junto al ejecutable.
+    */
+
+    snprintf(
+        rutaPrograma,
+        MAX_PATH,
+        "%s\\%s",
+        carpetaExe,
+        PROGRAM_FILE
+    );
+
+
+    archivo =
+        fopen(
+            rutaPrograma,
+            "r"
+        );
+
+
+    if (archivo != NULL)
+    {
+        snprintf(
+            rutaUsada,
+            tamRuta,
+            "%s",
+            rutaPrograma
+        );
+
+        return archivo;
+    }
+
+
+    /*
+       Mi ejecutable normalmente queda
+       dentro de output, asi que tambien
+       busco una carpeta arriba.
+    */
+
+    snprintf(
+        rutaPrograma,
+        MAX_PATH,
+        "%s\\..\\%s",
+        carpetaExe,
+        PROGRAM_FILE
+    );
+
+
+    archivo =
+        fopen(
+            rutaPrograma,
+            "r"
+        );
+
+
+    if (archivo != NULL)
+    {
+        snprintf(
+            rutaUsada,
+            tamRuta,
+            "%s",
+            rutaPrograma
+        );
+
+        return archivo;
+    }
+
+
+    /*
+       Como ultimo intento lo busco en
+       la carpeta de trabajo actual.
+    */
+
+    archivo =
+        fopen(
+            PROGRAM_FILE,
+            "r"
+        );
+
+
+    if (archivo != NULL)
+    {
+        snprintf(
+            rutaUsada,
+            tamRuta,
+            "%s",
+            PROGRAM_FILE
+        );
+
+        return archivo;
+    }
+
+
+    return NULL;
+}
+
+
+/* ===============================
+   ELEGIR TIPO DE CARGA
+   =============================== */
+
+int cargarPrograma(double memory[])
+{
+    int resultadoArchivo;
+
+    resultadoArchivo =
+        cargarDesdeArchivo(memory);
+
+
+    if (resultadoArchivo >= 0)
+    {
+        return resultadoArchivo;
+    }
+
+
+    printf(
+        "No se encontro programa.simp.\n"
+    );
+
+    printf(
+        "Se usara la carga interactiva.\n\n"
+    );
+
+
+    return cargarInteractivo(memory);
+}
+
+
+/* ===============================
+   CARGA AUTOMATICA
+   =============================== */
+
+int cargarDesdeArchivo(double memory[])
+{
+    FILE *archivo;
+
+    char linea[MAX_LINE];
+
+    char rutaUsada[MAX_PATH];
+
+    int posicion = 0;
+
+    int numeroLinea = 0;
+
+    double palabra;
+
+
+    archivo =
+        abrirProgramaAutomatico(
+            rutaUsada,
+            sizeof(rutaUsada)
+        );
+
+
+    if (archivo == NULL)
+    {
+        return -1;
+    }
+
+
+    printf(
+        "Archivo encontrado: %s\n",
+        rutaUsada
+    );
+
+    printf(
+        "Cargando programa...\n\n"
+    );
+
+
+    while (
+        fgets(
+            linea,
+            sizeof(linea),
+            archivo
+        ) != NULL
+    )
+    {
+        char *inicio =
+            linea;
+
+        char *comentario;
+
+
+        numeroLinea++;
+
+
+        /*
+           Quito espacios del inicio.
+        */
+
+        while (
+            isspace(
+                (unsigned char)*inicio
+            )
+        )
         {
-            printf(
-                "Entrada invalida. Introduzca un numero entero.\n"
-            );
+            inicio++;
+        }
 
+
+        /*
+           Ignoro lineas vacias.
+        */
+
+        if (
+            *inicio == '\0' ||
+            *inicio == '\n' ||
+            *inicio == '\r'
+        )
+        {
             continue;
         }
 
 
-        /* 9999 termina la carga */
-        if (palabra == 9999)
+        /*
+           Puedo usar # para dejar notas
+           dentro de programa.simp.
+        */
+
+        if (*inicio == '#')
+        {
+            continue;
+        }
+
+
+        comentario =
+            strchr(
+                inicio,
+                '#'
+            );
+
+
+        if (comentario != NULL)
+        {
+            *comentario =
+                '\0';
+        }
+
+
+        if (
+            !convertirNumero(
+                inicio,
+                &palabra
+            )
+        )
+        {
+            printf(
+                "Error en programa.simp, linea %d: valor invalido.\n",
+                numeroLinea
+            );
+
+            printf(
+                "Se limpiara la memoria y se pasara a carga manual.\n\n"
+            );
+
+
+            fclose(archivo);
+
+            limpiarMemoria(memory);
+
+
+            return cargarInteractivo(
+                memory
+            );
+        }
+
+
+        /*
+           Mantengo los dos codigos
+           para terminar la carga.
+        */
+
+        if (
+            esEntero(palabra) &&
+            (
+                (int)palabra == 9999 ||
+                (int)palabra == 99999
+            )
+        )
         {
             break;
         }
 
 
-        /* Validar rango */
-        if (palabra < -9999 || palabra > 9998)
+        if (
+            !validarRangoPalabra(
+                palabra
+            )
+        )
         {
             printf(
-                "Valor invalido. Debe estar entre -9999 y +9998.\n"
+                "Error en programa.simp, linea %d: valor fuera de rango.\n",
+                numeroLinea
+            );
+
+            printf(
+                "Se limpiara la memoria y se pasara a carga manual.\n\n"
+            );
+
+
+            fclose(archivo);
+
+            limpiarMemoria(memory);
+
+
+            return cargarInteractivo(
+                memory
+            );
+        }
+
+
+        if (
+            posicion >=
+            MEMORY_SIZE
+        )
+        {
+            printf(
+                "Error: programa.simp tiene mas de %d palabras.\n",
+                MEMORY_SIZE
+            );
+
+
+            fclose(archivo);
+
+            limpiarMemoria(memory);
+
+
+            return cargarInteractivo(
+                memory
+            );
+        }
+
+
+        memory[posicion] =
+            palabra;
+
+
+        posicion++;
+    }
+
+
+    fclose(archivo);
+
+
+    printf(
+        "*** Programa cargado desde archivo: %d palabras ***\n",
+        posicion
+    );
+
+
+    printf(
+        "*** Comienza la ejecucion del programa ***\n\n"
+    );
+
+
+    return posicion;
+}
+
+
+/* ===============================
+   CARGA MANUAL
+   =============================== */
+
+int cargarInteractivo(double memory[])
+{
+    char linea[MAX_LINE];
+
+    double palabra;
+
+    int posicion = 0;
+
+
+    printf(
+        "*** Carga manual ***\n"
+    );
+
+    printf(
+        "** Introduzca una instruccion o palabra de datos por linea. **\n"
+    );
+
+    printf(
+        "** Escriba 9999 o 99999 para terminar. **\n\n"
+    );
+
+
+    while (
+        posicion <
+        MEMORY_SIZE
+    )
+    {
+        printf(
+            "%03d ? ",
+            posicion
+        );
+
+        fflush(stdout);
+
+
+        if (
+            !leerLinea(
+                linea,
+                sizeof(linea)
+            )
+        )
+        {
+            break;
+        }
+
+
+        if (
+            !convertirNumero(
+                linea,
+                &palabra
+            )
+        )
+        {
+            printf(
+                "Entrada invalida. Escriba un numero.\n"
             );
 
             continue;
         }
 
 
-        /* Guardar exactamente en la posicion mostrada */
-        memory[posicion] = palabra;
+        if (
+            esEntero(palabra) &&
+            (
+                (int)palabra == 9999 ||
+                (int)palabra == 99999
+            )
+        )
+        {
+            break;
+        }
+
+
+        if (
+            !validarRangoPalabra(
+                palabra
+            )
+        )
+        {
+            printf(
+                "Valor invalido. Debe estar entre -99999 y +99998.\n"
+            );
+
+            continue;
+        }
+
+
+        memory[posicion] =
+            palabra;
+
 
         posicion++;
     }
 
 
-    printf("\n*** Carga del programa completa ***\n");
+    printf(
+        "\n*** Carga del programa completa: %d palabras ***\n",
+        posicion
+    );
 
-    printf("*** Comienza la ejecucion del programa ***\n\n");
+
+    printf(
+        "*** Comienza la ejecucion del programa ***\n\n"
+    );
+
+
+    return posicion;
 }
 
 
-/* =========================
-   EJECUTAR PROGRAMA
-   ========================= */
+/* ===============================
+   EJECUCION
+   =============================== */
 
-void ejecutarPrograma(int memory[])
+void ejecutarPrograma(double memory[])
 {
-    int accumulator = 0;
+    double accumulator =
+        0.0;
 
-    int instructionCounter = 0;
+    int instructionCounter =
+        0;
 
-    int instructionRegister = 0;
+    int instructionRegister =
+        0;
 
-    int operationCode = 0;
+    int operationCode =
+        0;
 
-    int operand = 0;
+    int operand =
+        0;
 
-    int dato;
+    char linea[MAX_LINE];
 
-    long resultado;
+    double dato;
+
+    double resultado;
 
 
     while (1)
     {
-        /* Verificar posicion de instruccion */
         if (
             instructionCounter < 0 ||
             instructionCounter >= MEMORY_SIZE
@@ -185,24 +753,104 @@ void ejecutarPrograma(int memory[])
         }
 
 
-        /* Obtener instruccion */
+        /*
+           Las instrucciones deben ser
+           enteras aunque los datos puedan
+           tener punto decimal.
+        */
+
+        if (
+            !esEntero(
+                memory[
+                    instructionCounter
+                ]
+            )
+        )
+        {
+            errorFatal(
+                "Se intento ejecutar un valor decimal como instruccion.",
+                memory,
+                accumulator,
+                instructionCounter,
+                instructionRegister,
+                operationCode,
+                operand
+            );
+
+            return;
+        }
+
+
         instructionRegister =
-            memory[instructionCounter];
+            (int)memory[
+                instructionCounter
+            ];
 
 
-        /* Separar codigo de operacion y direccion */
+        if (
+            !decodificarInstruccion(
+                instructionRegister,
+                &operationCode,
+                &operand
+            )
+        )
+        {
+            errorFatal(
+                "Formato de instruccion no valido.",
+                memory,
+                accumulator,
+                instructionCounter,
+                instructionRegister,
+                operationCode,
+                operand
+            );
 
-        operationCode =
-            instructionRegister / 100;
+            return;
+        }
 
-        operand =
-            instructionRegister % 100;
+
+        if (
+            !opcodeValido(
+                operationCode
+            )
+        )
+        {
+            errorFatal(
+                "Codigo de operacion no valido.",
+                memory,
+                accumulator,
+                instructionCounter,
+                instructionRegister,
+                operationCode,
+                operand
+            );
+
+            return;
+        }
+
+
+        if (
+            operand < 0 ||
+            operand >= MEMORY_SIZE
+        )
+        {
+            errorFatal(
+                "Direccion de memoria fuera de rango.",
+                memory,
+                accumulator,
+                instructionCounter,
+                instructionRegister,
+                operationCode,
+                operand
+            );
+
+            return;
+        }
 
 
         /*
-           Se prepara la siguiente posicion.
-           Las instrucciones BRANCH pueden
-           modificarla despues.
+           Normalmente avanzo una posicion.
+           Los BRANCH pueden cambiarla.
         */
 
         instructionCounter++;
@@ -211,85 +859,155 @@ void ejecutarPrograma(int memory[])
         switch (operationCode)
         {
 
-            /* =========================
-               10 - READ
-               ========================= */
+            /* 10 READ */
 
             case READ:
 
-                do
+                while (1)
                 {
                     printf("? ");
 
                     fflush(stdout);
 
-                    if (!leerEntero(&dato))
+
+                    if (
+                        !leerLinea(
+                            linea,
+                            sizeof(linea)
+                        )
+                    )
                     {
-                        printf(
-                            "Entrada invalida. Introduzca un numero entero.\n"
+                        errorFatal(
+                            "No se pudo leer el dato de entrada.",
+                            memory,
+                            accumulator,
+                            instructionCounter - 1,
+                            instructionRegister,
+                            operationCode,
+                            operand
                         );
 
-                        dato = 10000;
+                        return;
+                    }
+
+
+                    if (
+                        !convertirNumero(
+                            linea,
+                            &dato
+                        )
+                    )
+                    {
+                        printf(
+                            "Entrada invalida. Escriba un numero entero o decimal.\n"
+                        );
 
                         continue;
                     }
 
 
                     if (
-                        dato < -9999 ||
-                        dato > 9999
+                        fabs(dato) >
+                        WORD_LIMIT
                     )
                     {
                         printf(
-                            "Valor invalido. "
-                            "Debe estar entre -9999 y +9999.\n"
+                            "Valor fuera de rango. Use valores entre -99999 y +99999.\n"
                         );
+
+                        continue;
                     }
 
+
+                    memory[operand] =
+                        dato;
+
+
+                    break;
                 }
-                while (
-                    dato < -9999 ||
-                    dato > 9999
-                );
-
-
-                /*
-                   READ guarda el valor en la
-                   direccion indicada.
-
-                   Ejemplo:
-                   1097 -> memory[97]
-                */
-
-                memory[operand] = dato;
 
                 break;
 
 
-            /* =========================
-               11 - WRITE
-               ========================= */
+            /* 11 WRITE */
 
             case WRITE:
 
-                printf(
-                    "%+05d\n",
+                imprimirPalabra(
                     memory[operand]
                 );
+
+                printf("\n");
 
                 break;
 
 
-            /* =========================
-               20 - LOAD
-               ========================= */
+            /* 12 NEWLINE */
+
+            case NEWLINE:
+
+                printf("\n");
+
+                break;
+
+
+            /* 13 READSTRING */
+
+            case READSTRING:
+
+                if (
+                    !leerCadenaEnMemoria(
+                        memory,
+                        operand
+                    )
+                )
+                {
+                    errorFatal(
+                        "No se pudo guardar la cadena en memoria.",
+                        memory,
+                        accumulator,
+                        instructionCounter - 1,
+                        instructionRegister,
+                        operationCode,
+                        operand
+                    );
+
+                    return;
+                }
+
+                break;
+
+
+            /* 14 WRITESTRING */
+
+            case WRITESTRING:
+
+                if (
+                    !escribirCadenaDesdeMemoria(
+                        memory,
+                        operand
+                    )
+                )
+                {
+                    errorFatal(
+                        "Cadena invalida o direccion fuera de rango.",
+                        memory,
+                        accumulator,
+                        instructionCounter - 1,
+                        instructionRegister,
+                        operationCode,
+                        operand
+                    );
+
+                    return;
+                }
+
+                break;
+
+
+            /* 20 LOAD */
 
             case LOAD:
-
-                /*
-                   Ejemplo:
-                   2007 -> accumulator = memory[07]
-                */
 
                 accumulator =
                     memory[operand];
@@ -297,16 +1015,9 @@ void ejecutarPrograma(int memory[])
                 break;
 
 
-            /* =========================
-               21 - STORE
-               ========================= */
+            /* 21 STORE */
 
             case STORE:
-
-                /*
-                   Guarda accumulator en
-                   la direccion indicada.
-                */
 
                 memory[operand] =
                     accumulator;
@@ -314,20 +1025,19 @@ void ejecutarPrograma(int memory[])
                 break;
 
 
-            /* =========================
-               30 - ADD
-               ========================= */
+            /* 30 ADD */
 
             case ADD:
 
                 resultado =
-                    (long) accumulator +
+                    accumulator +
                     memory[operand];
 
 
                 if (
-                    resultado > 9999 ||
-                    resultado < -9999
+                    !verificarResultado(
+                        resultado
+                    )
                 )
                 {
                     errorFatal(
@@ -345,25 +1055,24 @@ void ejecutarPrograma(int memory[])
 
 
                 accumulator =
-                    (int) resultado;
+                    resultado;
 
                 break;
 
 
-            /* =========================
-               31 - SUBTRACT
-               ========================= */
+            /* 31 SUBTRACT */
 
             case SUBTRACT:
 
                 resultado =
-                    (long) accumulator -
+                    accumulator -
                     memory[operand];
 
 
                 if (
-                    resultado > 9999 ||
-                    resultado < -9999
+                    !verificarResultado(
+                        resultado
+                    )
                 )
                 {
                     errorFatal(
@@ -381,18 +1090,20 @@ void ejecutarPrograma(int memory[])
 
 
                 accumulator =
-                    (int) resultado;
+                    resultado;
 
                 break;
 
 
-            /* =========================
-               32 - DIVIDE
-               ========================= */
+            /* 32 DIVIDE */
 
             case DIVIDE:
 
-                if (memory[operand] == 0)
+                if (
+                    fabs(
+                        memory[operand]
+                    ) < 1e-12
+                )
                 {
                     errorFatal(
                         "Intento de division entre cero.",
@@ -408,27 +1119,50 @@ void ejecutarPrograma(int memory[])
                 }
 
 
-                accumulator =
-                    accumulator /
-                    memory[operand];
-
-                break;
-
-
-            /* =========================
-               33 - MULTIPLY
-               ========================= */
-
-            case MULTIPLY:
-
                 resultado =
-                    (long) accumulator *
+                    accumulator /
                     memory[operand];
 
 
                 if (
-                    resultado > 9999 ||
-                    resultado < -9999
+                    !verificarResultado(
+                        resultado
+                    )
+                )
+                {
+                    errorFatal(
+                        "Resultado fuera del rango permitido al dividir.",
+                        memory,
+                        accumulator,
+                        instructionCounter - 1,
+                        instructionRegister,
+                        operationCode,
+                        operand
+                    );
+
+                    return;
+                }
+
+
+                accumulator =
+                    resultado;
+
+                break;
+
+
+            /* 33 MULTIPLY */
+
+            case MULTIPLY:
+
+                resultado =
+                    accumulator *
+                    memory[operand];
+
+
+                if (
+                    !verificarResultado(
+                        resultado
+                    )
                 )
                 {
                     errorFatal(
@@ -446,14 +1180,110 @@ void ejecutarPrograma(int memory[])
 
 
                 accumulator =
-                    (int) resultado;
+                    resultado;
 
                 break;
 
 
-            /* =========================
-               40 - BRANCH
-               ========================= */
+            /* 34 MODULO */
+
+            case MODULO:
+
+                if (
+                    fabs(
+                        memory[operand]
+                    ) < 1e-12
+                )
+                {
+                    errorFatal(
+                        "Intento de modulo entre cero.",
+                        memory,
+                        accumulator,
+                        instructionCounter - 1,
+                        instructionRegister,
+                        operationCode,
+                        operand
+                    );
+
+                    return;
+                }
+
+
+                resultado =
+                    fmod(
+                        accumulator,
+                        memory[operand]
+                    );
+
+
+                if (
+                    !verificarResultado(
+                        resultado
+                    )
+                )
+                {
+                    errorFatal(
+                        "Resultado invalido en la operacion modulo.",
+                        memory,
+                        accumulator,
+                        instructionCounter - 1,
+                        instructionRegister,
+                        operationCode,
+                        operand
+                    );
+
+                    return;
+                }
+
+
+                accumulator =
+                    resultado;
+
+                break;
+
+
+            /* 35 POWER */
+
+            case POWER:
+
+                errno = 0;
+
+
+                resultado =
+                    pow(
+                        accumulator,
+                        memory[operand]
+                    );
+
+
+                if (
+                    errno != 0 ||
+                    !verificarResultado(
+                        resultado
+                    )
+                )
+                {
+                    errorFatal(
+                        "Resultado invalido o desbordamiento en la potencia.",
+                        memory,
+                        accumulator,
+                        instructionCounter - 1,
+                        instructionRegister,
+                        operationCode,
+                        operand
+                    );
+
+                    return;
+                }
+
+
+                accumulator =
+                    resultado;
+
+                break;
+
+
+            /* 40 BRANCH */
 
             case BRANCH:
 
@@ -463,13 +1293,14 @@ void ejecutarPrograma(int memory[])
                 break;
 
 
-            /* =========================
-               41 - BRANCHNEG
-               ========================= */
+            /* 41 BRANCHNEG */
 
             case BRANCHNEG:
 
-                if (accumulator < 0)
+                if (
+                    accumulator <
+                    0.0
+                )
                 {
                     instructionCounter =
                         operand;
@@ -478,13 +1309,15 @@ void ejecutarPrograma(int memory[])
                 break;
 
 
-            /* =========================
-               42 - BRANCHZERO
-               ========================= */
+            /* 42 BRANCHZERO */
 
             case BRANCHZERO:
 
-                if (accumulator == 0)
+                if (
+                    fabs(
+                        accumulator
+                    ) < 1e-12
+                )
                 {
                     instructionCounter =
                         operand;
@@ -493,9 +1326,7 @@ void ejecutarPrograma(int memory[])
                 break;
 
 
-            /* =========================
-               43 - HALT
-               ========================= */
+            /* 43 HALT */
 
             case HALT:
 
@@ -513,24 +1344,6 @@ void ejecutarPrograma(int memory[])
                     operand
                 );
 
-                return;
-
-
-            /* =========================
-               CODIGO INVALIDO
-               ========================= */
-
-            default:
-
-                errorFatal(
-                    "Codigo de operacion no valido.",
-                    memory,
-                    accumulator,
-                    instructionCounter - 1,
-                    instructionRegister,
-                    operationCode,
-                    operand
-                );
 
                 return;
         }
@@ -538,14 +1351,14 @@ void ejecutarPrograma(int memory[])
 }
 
 
-/* =========================
+/* ===============================
    ERROR FATAL
-   ========================= */
+   =============================== */
 
 void errorFatal(
     const char mensaje[],
-    int memory[],
-    int accumulator,
+    double memory[],
+    double accumulator,
     int instructionCounter,
     int instructionRegister,
     int operationCode,
@@ -559,8 +1372,7 @@ void errorFatal(
 
 
     printf(
-        "*** La ejecucion de Simpletron "
-        "termino anormalmente ***\n"
+        "*** La ejecucion de Simpletron termino anormalmente ***\n"
     );
 
 
@@ -575,13 +1387,13 @@ void errorFatal(
 }
 
 
-/* =========================
-   VACIADO DE MEMORIA
-   ========================= */
+/* ===============================
+   VACIADO
+   =============================== */
 
 void vaciado(
-    int memory[],
-    int accumulator,
+    double memory[],
+    double accumulator,
     int instructionCounter,
     int instructionRegister,
     int operationCode,
@@ -589,20 +1401,23 @@ void vaciado(
 )
 {
     int fila;
+
     int columna;
 
 
-    printf("\nREGISTROS:\n\n");
+    printf(
+        "\nREGISTROS:\n\n"
+    );
 
 
     printf(
-        "accumulator             %+05d\n",
+        "accumulator          %+12.3f\n",
         accumulator
     );
 
 
     printf(
-        "instructionCounter        %02d\n",
+        "instructionCounter        %03d\n",
         instructionCounter
     );
 
@@ -614,49 +1429,40 @@ void vaciado(
 
 
     printf(
-        "operationCode              %02d\n",
+        "operationCode               %02d\n",
         operationCode
     );
 
 
     printf(
-        "operand                    %02d\n",
+        "operand                    %03d\n",
         operand
     );
 
 
-    printf("\nMEMORIA:\n\n");
+    printf(
+        "\nMEMORIA:\n\n"
+    );
 
 
-    /*
-       Encabezado de columnas
+    printf("     ");
 
-       Ejemplo:
 
-             0      1      2 ... 9
-    */
-
-    printf("   ");
-
-    for (columna = 0; columna < 10; columna++)
+    for (
+        columna = 0;
+        columna < 10;
+        columna++
+    )
     {
         printf(
-            "%6d",
+            "%12d",
             columna
         );
     }
 
+
     printf("\n");
 
-
-    /*
-       Filas:
-
-       00 = posiciones 00 a 09
-       10 = posiciones 10 a 19
-       ...
-       90 = posiciones 90 a 99
-    */
 
     for (
         fila = 0;
@@ -665,7 +1471,7 @@ void vaciado(
     )
     {
         printf(
-            "%02d ",
+            "%03d  ",
             fila
         );
 
@@ -676,9 +1482,10 @@ void vaciado(
             columna++
         )
         {
-            printf(
-                "%+05d ",
-                memory[fila + columna]
+            imprimirPalabra(
+                memory[
+                    fila + columna
+                ]
             );
         }
 
@@ -688,37 +1495,646 @@ void vaciado(
 }
 
 
-/* =========================
-   LEER ENTERO
-   ========================= */
+/* ===============================
+   LEER LINEA
+   =============================== */
 
-int leerEntero(int *valor)
+int leerLinea(
+    char buffer[],
+    int tam
+)
 {
-    if (scanf("%d", valor) == 1)
+    size_t longitud;
+
+
+    if (
+        fgets(
+            buffer,
+            tam,
+            stdin
+        ) == NULL
+    )
     {
-        return 1;
+        return 0;
     }
 
 
-    limpiarEntrada();
+    longitud =
+        strlen(buffer);
 
-    return 0;
+
+    if (
+        longitud > 0 &&
+        buffer[
+            longitud - 1
+        ] == '\n'
+    )
+    {
+        buffer[
+            longitud - 1
+        ] = '\0';
+    }
+
+    else
+    {
+        int c;
+
+
+        while (
+            (c = getchar()) != '\n' &&
+            c != EOF
+        )
+        {
+        }
+    }
+
+
+    return 1;
 }
 
 
-/* =========================
-   LIMPIAR ENTRADA
-   ========================= */
+/* ===============================
+   TEXTO A NUMERO
+   =============================== */
 
-void limpiarEntrada(void)
+int convertirNumero(
+    const char texto[],
+    double *valor
+)
 {
-    int caracter;
+    char *fin;
+
+    double numero;
+
+
+    errno = 0;
+
+
+    numero =
+        strtod(
+            texto,
+            &fin
+        );
+
+
+    if (
+        texto == fin ||
+        errno == ERANGE
+    )
+    {
+        return 0;
+    }
 
 
     while (
-        (caracter = getchar()) != '\n' &&
-        caracter != EOF
+        isspace(
+            (unsigned char)*fin
+        )
     )
     {
+        fin++;
     }
+
+
+    if (*fin != '\0')
+    {
+        return 0;
+    }
+
+
+    if (!isfinite(numero))
+    {
+        return 0;
+    }
+
+
+    *valor =
+        numero;
+
+
+    return 1;
+}
+
+
+/* ===============================
+   REVISAR ENTERO
+   =============================== */
+
+int esEntero(double valor)
+{
+    return
+        fabs(
+            valor -
+            round(valor)
+        ) < 1e-9;
+}
+
+
+/* ===============================
+   VALIDAR RANGO
+   =============================== */
+
+int validarRangoPalabra(
+    double valor
+)
+{
+    /*
+       99999 queda reservado
+       para terminar la carga.
+    */
+
+    return
+        valor >= -WORD_LIMIT &&
+        valor <= (
+            WORD_LIMIT - 1.0
+        );
+}
+
+
+/* ===============================
+   LIMPIAR MEMORIA
+   =============================== */
+
+void limpiarMemoria(
+    double memory[]
+)
+{
+    int i;
+
+
+    for (
+        i = 0;
+        i < MEMORY_SIZE;
+        i++
+    )
+    {
+        memory[i] =
+            0.0;
+    }
+}
+
+
+/* ===============================
+   DECODIFICAR
+   =============================== */
+
+int decodificarInstruccion(
+    int instruction,
+    int *operationCode,
+    int *operand
+)
+{
+    if (
+        instruction < 0 ||
+        instruction > 99999
+    )
+    {
+        return 0;
+    }
+
+
+    /*
+       Formato nuevo:
+       OOAAA
+
+       Ejemplo:
+       20500
+
+       20 = LOAD
+       500 = direccion
+
+       Tambien mantengo el formato
+       anterior de cuatro digitos:
+
+       2007
+
+       20 = LOAD
+       07 = direccion
+    */
+
+    if (
+        instruction >=
+        10000
+    )
+    {
+        *operationCode =
+            instruction /
+            1000;
+
+
+        *operand =
+            instruction %
+            1000;
+    }
+
+    else
+    {
+        *operationCode =
+            instruction /
+            100;
+
+
+        *operand =
+            instruction %
+            100;
+    }
+
+
+    return 1;
+}
+
+
+/* ===============================
+   OPCODES VALIDOS
+   =============================== */
+
+int opcodeValido(
+    int operationCode
+)
+{
+    switch (operationCode)
+    {
+        case READ:
+        case WRITE:
+
+        case NEWLINE:
+        case READSTRING:
+        case WRITESTRING:
+
+        case LOAD:
+        case STORE:
+
+        case ADD:
+        case SUBTRACT:
+        case DIVIDE:
+        case MULTIPLY:
+
+        case MODULO:
+        case POWER:
+
+        case BRANCH:
+        case BRANCHNEG:
+        case BRANCHZERO:
+
+        case HALT:
+
+            return 1;
+
+
+        default:
+
+            return 0;
+    }
+}
+
+
+/* ===============================
+   VALIDAR RESULTADO
+   =============================== */
+
+int verificarResultado(
+    double resultado
+)
+{
+    if (
+        !isfinite(
+            resultado
+        )
+    )
+    {
+        return 0;
+    }
+
+
+    if (
+        fabs(resultado) >
+        WORD_LIMIT
+    )
+    {
+        return 0;
+    }
+
+
+    return 1;
+}
+
+
+/* ===============================
+   LEER CADENA
+   =============================== */
+
+int leerCadenaEnMemoria(
+    double memory[],
+    int base
+)
+{
+    char texto[MAX_LINE];
+
+    size_t longitud;
+
+    size_t i;
+
+
+    printf("? ");
+
+    fflush(stdout);
+
+
+    if (
+        !leerLinea(
+            texto,
+            sizeof(texto)
+        )
+    )
+    {
+        return 0;
+    }
+
+
+    longitud =
+        strlen(texto);
+
+
+    if (
+        longitud >
+        MAX_STRING
+    )
+    {
+        printf(
+            "La cadena supera el limite de %d caracteres.\n",
+            MAX_STRING
+        );
+
+        return 0;
+    }
+
+
+    if (
+        base < 0 ||
+        base +
+        (int)longitud >=
+        MEMORY_SIZE
+    )
+    {
+        printf(
+            "La cadena no cabe a partir de la direccion %03d.\n",
+            base
+        );
+
+        return 0;
+    }
+
+
+    /*
+       Uso ASCII normal, por eso
+       acepto valores de 0 a 127.
+    */
+
+    for (
+        i = 0;
+        i < longitud;
+        i++
+    )
+    {
+        unsigned char c =
+            (unsigned char)
+            texto[i];
+
+
+        if (c > 127)
+        {
+            printf(
+                "La entrada de cadenas usa ASCII. Use caracteres ASCII.\n"
+            );
+
+            return 0;
+        }
+    }
+
+
+    /*
+       La primera palabra guarda
+       la longitud.
+
+       Ejemplo:
+       Mundo tiene 5 caracteres.
+
+       memory[base] = 05000
+    */
+
+    memory[base] =
+        (double)(
+            (int)longitud *
+            1000
+        );
+
+
+    /*
+       Despues guardo el numero
+       de caracter y su codigo ASCII.
+
+       Ejemplo:
+       M = 077
+
+       Queda:
+       01 077
+    */
+
+    for (
+        i = 0;
+        i < longitud;
+        i++
+    )
+    {
+        memory[
+            base +
+            (int)i +
+            1
+        ] =
+            (double)(
+                (
+                    (int)i + 1
+                ) *
+                1000 +
+                (unsigned char)
+                texto[i]
+            );
+    }
+
+
+    return 1;
+}
+
+
+/* ===============================
+   ESCRIBIR CADENA
+   =============================== */
+
+int escribirCadenaDesdeMemoria(
+    double memory[],
+    int base
+)
+{
+    int primeraPalabra;
+
+    int longitud;
+
+    int i;
+
+
+    if (
+        base < 0 ||
+        base >= MEMORY_SIZE
+    )
+    {
+        return 0;
+    }
+
+
+    if (
+        !esEntero(
+            memory[base]
+        )
+    )
+    {
+        return 0;
+    }
+
+
+    primeraPalabra =
+        (int)memory[base];
+
+
+    longitud =
+        primeraPalabra /
+        1000;
+
+
+    if (
+        longitud < 0 ||
+        longitud > MAX_STRING
+    )
+    {
+        return 0;
+    }
+
+
+    if (
+        base +
+        longitud >=
+        MEMORY_SIZE
+    )
+    {
+        return 0;
+    }
+
+
+    for (
+        i = 1;
+        i <= longitud;
+        i++
+    )
+    {
+        int palabra;
+
+        int indice;
+
+        int ascii;
+
+
+        if (
+            !esEntero(
+                memory[
+                    base + i
+                ]
+            )
+        )
+        {
+            return 0;
+        }
+
+
+        palabra =
+            (int)memory[
+                base + i
+            ];
+
+
+        indice =
+            palabra /
+            1000;
+
+
+        ascii =
+            palabra %
+            1000;
+
+
+        if (
+            indice != i ||
+            ascii < 0 ||
+            ascii > 127
+        )
+        {
+            return 0;
+        }
+
+
+        putchar(
+            (char)ascii
+        );
+    }
+
+
+    return 1;
+}
+
+
+/* ===============================
+   MOSTRAR PALABRA
+   =============================== */
+
+void imprimirPalabra(
+    double valor
+)
+{
+    if (
+        esEntero(valor)
+    )
+    {
+        printf(
+            "%+12.0f",
+            valor
+        );
+    }
+
+    else
+    {
+        printf(
+            "%+12.3f",
+            valor
+        );
+    }
+}
+
+
+/* ===============================
+   PAUSA FINAL
+   =============================== */
+
+void pausarPrograma(void)
+{
+    char pausa[10];
+
+
+    printf(
+        "\nPresione Enter para cerrar..."
+    );
+
+
+    fgets(
+        pausa,
+        sizeof(pausa),
+        stdin
+    );
 }
