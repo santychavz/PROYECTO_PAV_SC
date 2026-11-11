@@ -1,0 +1,35 @@
+=== RAMAS LOCALES Y REMOTAS ===
+* feature/compilador-simple
+  feature/correcciones-simpletron
+  feature/expresiones-completas
+  feature/mejoras-simpletron
+  feature/pila-reduccion
+  master
+  remotes/origin/feature/compilador-simple
+  remotes/origin/feature/correcciones-simpletron
+  remotes/origin/feature/expresiones-completas
+  remotes/origin/feature/mejoras-simpletron
+  remotes/origin/feature/pila-reduccion
+  remotes/origin/master
+=== HISTORIAL DE COMMITS ===
+* 46c4533 (HEAD -> feature/compilador-simple, origin/master, origin/feature/compilador-simple) Agrega compilacion automatica del proyecto
+* b8b0dd0 Prepara version final y evidencia de Git
+* 3889363 Documenta arquitectura y decisiones de diseno
+* 1380164 Agrega programas Simple y SML con resultados esperados
+* 799ca6f Agrega evidencias de mejoras expresiones y compilador
+* cfaa012 Actualiza documentacion de Simpletron y compilador
+* f745e59 Organiza archivos generados del compilador
+* 789ed60 Implementa compilador Simple a SML de dos pasadas
+* 5b38ff8 (origin/feature/expresiones-completas, feature/expresiones-completas) Implementa conversion infija a postfija y validaciones
+* d0d1c0a (origin/feature/correcciones-simpletron, feature/correcciones-simpletron) Actualiza Simpletron y valida funciones principales
+* ec27cc8 (origin/feature/pila-reduccion, feature/pila-reduccion) Respaldo de Simpletron antes de correcciones finales
+* 40b8a04 (master) Completa Simpletron basica y agrega pruebas
+| * 4085421 (origin/feature/mejoras-simpletron, feature/mejoras-simpletron) Mejoras iniciales en Simpletron
+|/  
+* c2c5f4c Version inicial del proyecto Simpletron
+=== REPOSITORIO REMOTO ===
+origin	https://github.com/santychavz/PROYECTO_PAV_SC.git (fetch)
+origin	https://github.com/santychavz/PROYECTO_PAV_SC.git (push)
+=== ESTADO DEL PROYECTO ===
+## feature/compilador-simple...origin/feature/compilador-simple
+?? Pruebas/Evidencias_Simpletron/GitBranch/
