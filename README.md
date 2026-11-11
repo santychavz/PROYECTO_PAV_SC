@@ -297,3 +297,7 @@ https://github.com/santychavz/PROYECTO_PAV_SC
 
 Proyecto académico de Programación Avanzada.
 
+
+## Compilacion automatica
+Desde Git Bash ejecutar: `bash build.sh`
+Este comando crea output y compila el simulador y el compilador.
