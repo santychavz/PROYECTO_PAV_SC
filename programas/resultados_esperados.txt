@@ -1,0 +1,13 @@
+PRUEBAS DEL PROYECTO SIMPLETRON
+
+1. SUMA
+Entradas: 7, 5
+Resultado esperado: +12
+
+2. SELECCION
+Entradas: 3, 8
+Resultado esperado: +8
+
+3. REPETICION
+Entrada: 4
+Resultado esperado: +10

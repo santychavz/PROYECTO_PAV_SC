@@ -1,0 +1,9 @@
+10 input n
+20 let i = 1
+30 let s = 0
+40 if i > n goto 80
+50 let s = s + i
+60 let i = i + 1
+70 goto 40
+80 print s
+90 end
