@@ -1,0 +1,12 @@
+10 let a = 5
+20 let b = 5
+30 if a <= b goto 50
+40 goto 110
+50 if a >= b goto 70
+60 goto 110
+70 if a == b goto 90
+80 goto 110
+90 if a != b goto 110
+100 let c = 1
+110 print c
+120 end
