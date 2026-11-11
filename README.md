@@ -1,25 +1,28 @@
-# Simpletron
 
-Proyecto de simulacion de la computadora Simpletron desarrollado para la materia de Programacion Avanzada.
+# PROYECTO DE PROGRAMACIÓN AVANZADA
+## Simulador Simpletron y Compilador Simple a SML
 
-Esta rama contiene la version basica de Simpletron. El programa utiliza una memoria de 100 posiciones y permite cargar y ejecutar instrucciones escritas en SML (Simpletron Machine Language).
+Proyecto desarrollado para la materia de Programación Avanzada de UPAEP.
 
-## Caracteristicas
+El objetivo es implementar un simulador de la computadora Simpletron, incorporar mejoras a su funcionamiento y construir un compilador capaz de traducir programas escritos en lenguaje Simple a instrucciones SML.
 
-- Memoria de 100 posiciones.
-- Carga manual de instrucciones.
-- El valor 9999 termina la carga del programa.
-- Validacion de palabras entre -9999 y +9998 durante la carga.
-- Ciclo de busqueda, decodificacion y ejecucion.
-- Manejo de los registros internos de Simpletron.
-- Implementacion de las 12 operaciones SML.
-- Deteccion de errores fatales.
-- Vaciado completo de registros y memoria al terminar la ejecucion.
-- Vaciado de registros y memoria cuando ocurre un error fatal.
+## 1. Características del simulador
 
-## Registros
+El proyecto cuenta con:
 
-El simulador utiliza los siguientes registros:
+- Memoria de 1000 posiciones.
+- Carga automática desde programa.simp.
+- Carga manual cuando no existe un archivo válido.
+- Ciclo de búsqueda, decodificación y ejecución.
+- Registros internos de Simpletron.
+- Las 12 instrucciones originales SML.
+- Instrucciones adicionales.
+- Detección de errores fatales.
+- Validación de operaciones y direcciones.
+- Vaciado de registros y memoria.
+- Herramientas de pila y evaluación de expresiones.
+
+### Registros
 
 - accumulator
 - instructionCounter
@@ -27,137 +30,270 @@ El simulador utiliza los siguientes registros:
 - operationCode
 - operand
 
-## Operaciones SML
+## 2. Instrucciones SML
 
-| Codigo | Operacion | Funcion |
+| Código | Instrucción | Función |
 |---|---|---|
-| 10 | READ | Lee un valor y lo guarda en memoria |
-| 11 | WRITE | Muestra un valor almacenado en memoria |
-| 20 | LOAD | Carga un valor de memoria al acumulador |
-| 21 | STORE | Guarda el acumulador en memoria |
-| 30 | ADD | Suma un valor al acumulador |
-| 31 | SUBTRACT | Resta un valor al acumulador |
-| 32 | DIVIDE | Divide el acumulador entre un valor de memoria |
-| 33 | MULTIPLY | Multiplica el acumulador por un valor de memoria |
-| 40 | BRANCH | Realiza un salto a otra posicion |
-| 41 | BRANCHNEG | Salta si el acumulador es negativo |
-| 42 | BRANCHZERO | Salta si el acumulador es cero |
-| 43 | HALT | Termina la ejecucion |
+| 10 | READ | Leer un número |
+| 11 | WRITE | Mostrar un número |
+| 12 | NEWLINE | Salto de línea |
+| 13 | READSTRING | Leer una cadena ASCII |
+| 14 | WRITESTRING | Mostrar una cadena ASCII |
+| 20 | LOAD | Cargar al acumulador |
+| 21 | STORE | Guardar el acumulador |
+| 30 | ADD | Sumar |
+| 31 | SUBTRACT | Restar |
+| 32 | DIVIDE | Dividir |
+| 33 | MULTIPLY | Multiplicar |
+| 34 | MODULO | Calcular residuo |
+| 35 | POWER | Calcular potencia |
+| 40 | BRANCH | Salto incondicional |
+| 41 | BRANCHNEG | Salto si es negativo |
+| 42 | BRANCHZERO | Salto si es cero |
+| 43 | HALT | Finalizar programa |
 
-## Formato de las instrucciones
+### Formato de instrucciones
 
-Las instrucciones utilizan cuatro digitos.
+La versión mejorada utiliza instrucciones de cinco dígitos:
+
+- Dos dígitos para el código de operación.
+- Tres dígitos para la dirección de memoria.
+
+Ejemplo: 20500
+
+- 20: LOAD
+- 500: dirección de memoria
+
+Este formato permite acceder a las 1000 posiciones de memoria.
+
+## 3. Compilación del simulador
+
+Se necesita un compilador compatible con C++17.
+
+Desde Git Bash:
+
+```bash
+g++ -std=c++17 -Wall -Wextra SIMPLETRON1.0.CPP -o output/simpletron_revision.exe
+```
+
+Para ejecutar:
+
+```bash
+./output/simpletron_revision.exe
+```
+
+El simulador busca automáticamente programa.simp. Si no encuentra un archivo válido, permite introducir instrucciones manualmente.
+
+## 4. Herramientas de expresiones
+
+El programa incorpora herramientas basadas en pilas.
+
+### Validación de agrupadores
+
+```bash
+./output/simpletron_revision.exe --pila
+```
+
+Permite revisar agrupadores y calcular la profundidad máxima de anidamiento.
+
+### Evaluación postfija
+
+```bash
+./output/simpletron_revision.exe --postfijo
+```
 
 Ejemplo:
 
-    2090
+Entrada: 3 5 4 * +
 
-Donde:
+Resultado: 23
 
-    20 = LOAD
-    90 = posicion de memoria
+### Conversión infija a postfija
 
-El codigo de operacion se obtiene dividiendo la instruccion entre 100 y la direccion se obtiene utilizando el residuo de la division entre 100.
+```bash
+./output/simpletron_revision.exe --infijo
+```
 
-## Archivo principal
+Ejemplo:
 
-El archivo principal del proyecto es:
+Infija: 12 + 3 * (8 - 5)
 
-    SIMPLETRON1.0.CPP
+Postfija: 12 3 8 5 - * +
 
-## Compilacion
+Resultado: 21
 
-Para compilar el programa con g++:
+Se implementaron reglas de precedencia, asociatividad, paréntesis, operadores aritméticos y validación de expresiones.
 
-    g++ "SIMPLETRON1.0.CPP" -o "SIMPLETRON1.0.exe"
+## 5. Compilador Simple a SML
 
-Tambien puede compilarse desde Visual Studio Code utilizando el compilador configurado.
+El compilador se encuentra en:
 
-## Ejecucion
+CompiladorSimpletron/compiler.cpp
 
-Despues de compilar se genera:
+Traduce programas escritos en Simple a instrucciones ejecutables por Simpletron.
 
-    SIMPLETRON1.0.exe
+### Instrucciones del lenguaje Simple
 
-Puede abrirse directamente o ejecutarse desde la terminal con:
+- rem: comentarios.
+- input: entrada de datos.
+- let: asignación y expresiones.
+- print: salida de datos.
+- goto: saltos incondicionales.
+- if/goto: condiciones y bifurcaciones.
+- end: finalización.
 
-    .\SIMPLETRON1.0.exe
+### Arquitectura del compilador
 
-Al iniciar, Simpletron solicita una palabra por cada posicion de memoria:
+Se implementa un proceso de dos pasadas.
 
-    00 ?
-    01 ?
-    02 ?
+Primera pasada:
 
-Para terminar la carga del programa se introduce:
+- Lectura y análisis de instrucciones Simple.
+- Identificación de símbolos.
+- Construcción de la tabla de símbolos.
+- Asignación de direcciones de memoria.
+- Generación de instrucciones SML.
+- Registro de referencias pendientes.
 
-    9999
+Segunda pasada:
 
-## Ejemplo de programa
+- Resolución de saltos pendientes.
+- Comprobación de referencias.
+- Generación del archivo SML final.
 
-El siguiente programa lee dos numeros, los suma y muestra el resultado:
+La tabla de símbolos registra líneas, variables y constantes, junto con sus direcciones.
 
-    1090
-    1091
-    2090
-    3091
-    2192
-    1192
-    4300
-    9999
+## 6. Compilación y ejecución del compilador
 
-Durante la ejecucion, si se introducen los valores:
+Compilar:
 
-    8
-    2
+```bash
+g++ -std=c++17 -Wall -Wextra CompiladorSimpletron/compiler.cpp -o output/compiler.exe
+```
 
-el resultado es:
+Ejecutar:
 
-    +0010
+```bash
+./output/compiler.exe
+```
 
-Al terminar la ejecucion se muestran los registros y las 100 posiciones de memoria.
+El compilador lee:
 
-## Manejo de errores
+CompiladorSimpletron/programa.simple
 
-El simulador detecta errores como:
+Y genera:
 
-- Division entre cero.
-- Codigo de operacion invalido.
-- Desbordamiento del acumulador.
-- Contador de instrucciones fuera de rango.
-- Estados o accesos invalidos.
+- programa.sml: código SML.
+- programa.simp: archivo para el simulador.
 
-Cuando ocurre un error fatal se muestra el mensaje correspondiente y se realiza un vaciado completo de los registros y de la memoria.
+Para ejecutar el programa traducido:
 
-## Pruebas realizadas
+```bash
+./output/simpletron_revision.exe
+```
 
-Se comprobaron las siguientes operaciones:
+## 7. Ejemplo de programa Simple
 
-- READ
-- WRITE
-- LOAD
-- STORE
-- ADD
-- SUBTRACT
-- DIVIDE
-- MULTIPLY
-- BRANCH
-- BRANCHNEG
-- BRANCHZERO
-- HALT
+```text
+10 input a
+20 input b
+30 let c = a + b
+40 print c
+50 end
+```
 
-Tambien se realizaron pruebas de:
+Si se introducen 7 y 5, el resultado será:
 
-- Division entre cero.
-- Codigo de operacion invalido.
-- Desbordamiento del acumulador.
-- Validacion de valores fuera del rango permitido.
+```text
++12
+```
 
-Los casos de prueba se encuentran en la carpeta pruebas.
+El compilador traduce el programa a SML y Simpletron ejecuta las instrucciones generadas.
 
-## Ramas del proyecto
+## 8. Pruebas realizadas
 
-El repositorio contiene dos versiones del proyecto:
+### Simulador
 
-- master: version basica de Simpletron.
-- feature: version con modificaciones y mejoras posteriores.
+Se comprobaron:
+
+- Lectura y escritura.
+- Operaciones aritméticas.
+- Memoria de 1000 posiciones.
+- Carga automática y manual.
+- División entre cero.
+- Códigos de operación inválidos.
+- Desbordamiento.
+- Lectura y escritura ASCII.
+- Módulo, potencia y salto de línea.
+- Recuperación ante archivos inválidos.
+
+### Expresiones
+
+Se realizaron pruebas de:
+
+- Agrupadores correctos e incorrectos.
+- Profundidad de anidamiento.
+- Evaluación postfija.
+- Conversión infija a postfija.
+- Precedencia y asociatividad.
+- Potencias.
+- Números negativos.
+- Expresiones inválidas.
+
+### Compilador
+
+Se comprobaron:
+
+- Generación de instrucciones SML.
+- Construcción de la tabla de símbolos.
+- Asignación de variables.
+- Operaciones aritméticas.
+- Expresiones con paréntesis.
+- Condiciones if/goto.
+- Referencias hacia adelante.
+- Saltos hacia atrás.
+- Ejecución de ciclos.
+- Detección de saltos a líneas inexistentes.
+- Integración con el simulador Simpletron.
+
+## 9. Organización del proyecto
+
+```text
+PROYECTO PROGRA AV/
+|
+|-- SIMPLETRON1.0.CPP
+|-- CompiladorSimpletron/
+|   |-- compiler.cpp
+|   |-- programa.simple
+|
+|-- Pruebas/
+|-- output/
+|-- .gitignore
+|-- README
+```
+
+La carpeta output contiene ejecutables generados localmente.
+
+Los archivos programa.simp y programa.sml de la raíz son resultados generados por el compilador y están excluidos mediante .gitignore.
+
+## 10. Control de versiones
+
+El proyecto utiliza Git y GitHub.
+
+Ramas de desarrollo:
+
+- master: versión básica.
+- feature/mejoras-simpletron: ampliaciones del simulador.
+- feature/pila-reduccion: algoritmos de pila.
+- feature/correcciones-simpletron: correcciones del simulador.
+- feature/expresiones-completas: procesamiento de expresiones.
+- feature/compilador-simple: compilador Simple a SML.
+
+Las funcionalidades se desarrollaron y probaron progresivamente en ramas independientes.
+
+## 11. Repositorio
+
+https://github.com/santychavz/PROYECTO_PAV_SC
+
+Proyecto académico de Programación Avanzada.
+
