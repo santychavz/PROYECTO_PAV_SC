@@ -10,3 +10,7 @@
 # Configuración de editores
 .vscode/
 .idea/
+
+# Archivos generados por el compilador
+/programa.simp
+/programa.sml
