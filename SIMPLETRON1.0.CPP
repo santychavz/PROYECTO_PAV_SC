@@ -1897,271 +1897,102 @@ int verificarResultado(
 
 
 /* ===============================
-   LEER CADENA
+   LEER CADENA: longitud(2) + ASCII(3)
+   Primera palabra: LLAAA
+   Palabras siguientes: 00AAA
    =============================== */
 
-int leerCadenaEnMemoria(
-    double memory[],
-    int base
-)
+int leerCadenaEnMemoria(double memory[], int base)
 {
     char texto[MAX_LINE];
-
     size_t longitud;
-
     size_t i;
 
-
     printf("? ");
-
     fflush(stdout);
 
+    if (!leerLinea(texto, sizeof(texto)))
+        return 0;
 
-    if (
-        !leerLinea(
-            texto,
-            sizeof(texto)
-        )
-    )
+    longitud = strlen(texto);
+
+    if (longitud > MAX_STRING)
     {
+        printf("La cadena supera el limite de %d caracteres.\n", MAX_STRING);
         return 0;
     }
 
-
-    longitud =
-        strlen(texto);
-
-
-    if (
-        longitud >
-        MAX_STRING
-    )
+    /* Una cadena vacia utiliza solo memory[base]. */
+    if (base < 0 || base >= MEMORY_SIZE ||
+        (longitud > 0 && longitud > (size_t)(MEMORY_SIZE - base)))
     {
-        printf(
-            "La cadena supera el limite de %d caracteres.\n",
-            MAX_STRING
-        );
-
+        printf("La cadena no cabe a partir de la direccion %03d.\n", base);
         return 0;
     }
 
-
-    if (
-        base < 0 ||
-        base +
-        (int)longitud >=
-        MEMORY_SIZE
-    )
+    for (i = 0; i < longitud; ++i)
     {
-        printf(
-            "La cadena no cabe a partir de la direccion %03d.\n",
-            base
-        );
-
-        return 0;
-    }
-
-
-    /*
-       Uso ASCII normal, por eso
-       acepto valores de 0 a 127.
-    */
-
-    for (
-        i = 0;
-        i < longitud;
-        i++
-    )
-    {
-        unsigned char c =
-            (unsigned char)
-            texto[i];
-
-
-        if (c > 127)
+        if ((unsigned char)texto[i] > 127)
         {
-            printf(
-                "La entrada de cadenas usa ASCII. Use caracteres ASCII.\n"
-            );
-
+            printf("La entrada de cadenas usa ASCII (0-127).\n");
             return 0;
         }
     }
 
+    /* Primeros dos digitos = longitud, ultimos tres = primer ASCII. */
+    memory[base] = (double)((int)longitud * 1000 +
+        (longitud > 0 ? (unsigned char)texto[0] : 0));
 
-    /*
-       La primera palabra guarda
-       la longitud.
-
-       Ejemplo:
-       Mundo tiene 5 caracteres.
-
-       memory[base] = 05000
-    */
-
-    memory[base] =
-        (double)(
-            (int)longitud *
-            1000
-        );
-
-
-    /*
-       Despues guardo el numero
-       de caracter y su codigo ASCII.
-
-       Ejemplo:
-       M = 077
-
-       Queda:
-       01 077
-    */
-
-    for (
-        i = 0;
-        i < longitud;
-        i++
-    )
-    {
-        memory[
-            base +
-            (int)i +
-            1
-        ] =
-            (double)(
-                (
-                    (int)i + 1
-                ) *
-                1000 +
-                (unsigned char)
-                texto[i]
-            );
-    }
-
+    /* Los caracteres restantes se almacenan como ASCII decimal. */
+    for (i = 1; i < longitud; ++i)
+        memory[base + (int)i] = (double)(unsigned char)texto[i];
 
     return 1;
 }
 
 
 /* ===============================
-   ESCRIBIR CADENA
+   ESCRIBIR CADENA: longitud(2) + ASCII(3)
    =============================== */
 
-int escribirCadenaDesdeMemoria(
-    double memory[],
-    int base
-)
+int escribirCadenaDesdeMemoria(double memory[], int base)
 {
     int primeraPalabra;
-
     int longitud;
-
+    int primerAscii;
     int i;
 
-
-    if (
-        base < 0 ||
-        base >= MEMORY_SIZE
-    )
-    {
+    if (base < 0 || base >= MEMORY_SIZE || !esEntero(memory[base]))
         return 0;
-    }
 
-
-    if (
-        !esEntero(
-            memory[base]
-        )
-    )
-    {
+    primeraPalabra = (int)memory[base];
+    if (primeraPalabra < 0 || primeraPalabra > 99999)
         return 0;
-    }
 
+    longitud = primeraPalabra / 1000;
+    primerAscii = primeraPalabra % 1000;
 
-    primeraPalabra =
-        (int)memory[base];
-
-
-    longitud =
-        primeraPalabra /
-        1000;
-
-
-    if (
-        longitud < 0 ||
-        longitud > MAX_STRING
-    )
-    {
+    if (longitud < 0 || longitud > MAX_STRING ||
+        (longitud > 0 && longitud > MEMORY_SIZE - base))
         return 0;
-    }
 
+    if (longitud == 0)
+        return primerAscii == 0;
 
-    if (
-        base +
-        longitud >=
-        MEMORY_SIZE
-    )
-    {
+    if (primerAscii > 127)
         return 0;
-    }
 
-
-    for (
-        i = 1;
-        i <= longitud;
-        i++
-    )
+    /* Validar la cadena completa antes de imprimirla. */
+    for (i = 1; i < longitud; ++i)
     {
-        int palabra;
-
-        int indice;
-
-        int ascii;
-
-
-        if (
-            !esEntero(
-                memory[
-                    base + i
-                ]
-            )
-        )
-        {
+        if (!esEntero(memory[base + i]) ||
+            memory[base + i] < 0 || memory[base + i] > 127)
             return 0;
-        }
-
-
-        palabra =
-            (int)memory[
-                base + i
-            ];
-
-
-        indice =
-            palabra /
-            1000;
-
-
-        ascii =
-            palabra %
-            1000;
-
-
-        if (
-            indice != i ||
-            ascii < 0 ||
-            ascii > 127
-        )
-        {
-            return 0;
-        }
-
-
-        putchar(
-            (char)ascii
-        );
     }
 
+    putchar((char)primerAscii);
+    for (i = 1; i < longitud; ++i)
+        putchar((char)(int)memory[base + i]);
 
     return 1;
 }
