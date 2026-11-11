@@ -282,7 +282,7 @@ El proyecto utiliza Git y GitHub.
 
 Ramas de desarrollo:
 
-- master: versión básica.
+- master: version final integrada para entrega.
 - feature/mejoras-simpletron: ampliaciones del simulador.
 - feature/pila-reduccion: algoritmos de pila.
 - feature/correcciones-simpletron: correcciones del simulador.
