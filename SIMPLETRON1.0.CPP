@@ -5,6 +5,11 @@
 #include <math.h>
 #include <errno.h>
 #include <windows.h>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <iomanip>
+#include <limits>
 
 #define MEMORY_SIZE 1000
 #define PROGRAM_FILE "programa.simp"
@@ -144,6 +149,13 @@ int aplicarOperadorPostfijo(
 float evaluar(char expresion[]);
 void modoPostfijo(void);
 
+/* Conversion infija a postfija, para las expresiones y el compilador. */
+bool convertirInfijaAPostfija(const std::string &infija,
+                            std::string &postfija, std::string &error);
+bool evaluarPostfijaExtendida(const std::string &postfija,
+                             double &resultado, std::string &error);
+void modoInfijo(void);
+
 void pausarPrograma(void);
 
 
@@ -186,6 +198,14 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+
+    /* --infijo: convertir, mostrar postfijo y evaluar si es numerica. */
+    if (argc > 1 && strcmp(argv[1], "--infijo") == 0)
+    {
+        modoInfijo();
+        pausarPrograma();
+        return 0;
+    }
 
     double memory[MEMORY_SIZE] = {0};
 
@@ -3024,6 +3044,313 @@ void modoPostfijo(void)
             "Resultado: %.3f\n",
             resultado
         );
+    }
+}
+
+
+
+
+/* ============================================================
+   CONVERSION DE INFIJO A POSTFIJO (SHUNTING-YARD)
+   - Acepta numeros de varios digitos, decimales y variables.
+   - Respeta () [] {}, potencia asociativa a la derecha.
+   - Negacion unaria se representa como "neg" en el postfijo.
+   - La conversion y la evaluacion quedan disponibles para
+     reutilizarse desde el compilador Simple -> SML.
+   ============================================================ */
+
+static bool esApertura(char c)
+{
+    return c == '(' || c == '[' || c == '{';
+}
+
+static bool esCierre(char c)
+{
+    return c == ')' || c == ']' || c == '}';
+}
+
+static bool coinciden(char a, char b)
+{
+    return (a == '(' && b == ')') ||
+           (a == '[' && b == ']') ||
+           (a == '{' && b == '}');
+}
+
+static bool esOperadorInfijo(const std::string &op)
+{
+    return op == "+" || op == "-" || op == "*" ||
+           op == "/" || op == "%" || op == "^" ||
+           op == "u+" || op == "u-";
+}
+
+static int prioridadInfijo(const std::string &op)
+{
+    if (op == "^") return 4;
+    if (op == "u+" || op == "u-") return 3;
+    if (op == "*" || op == "/" || op == "%") return 2;
+    if (op == "+" || op == "-") return 1;
+    return 0;
+}
+
+static bool derechaAsociativo(const std::string &op)
+{
+    return op == "^" || op == "u+" || op == "u-";
+}
+
+bool convertirInfijaAPostfija(const std::string &infija,
+                            std::string &postfija, std::string &error)
+{
+    postfija.clear();
+    error.clear();
+    std::vector<std::string> operadores;
+    std::vector<std::string> salida;
+    bool esperaOperando = true;
+    size_t i = 0;
+
+    while (i < infija.size())
+    {
+        unsigned char c = (unsigned char)infija[i];
+        if (isspace(c)) { ++i; continue; }
+
+        // Numero entero o decimal; no se pierde un numero multidigito.
+        if (isdigit(c) || (c == '.' && i + 1 < infija.size() &&
+                           isdigit((unsigned char)infija[i+1])))
+        {
+            if (!esperaOperando) { error = "Falta operador entre operandos."; return false; }
+            size_t inicio = i;
+            bool punto = false;
+            while (i < infija.size())
+            {
+                unsigned char d = (unsigned char)infija[i];
+                if (isdigit(d)) { ++i; continue; }
+                if (d == '.' && !punto) { punto = true; ++i; continue; }
+                break;
+            }
+            std::string numero = infija.substr(inicio, i - inicio);
+            char *fin = NULL;
+            errno = 0;
+            double valor = strtod(numero.c_str(), &fin);
+            if (!fin || *fin != '\0' || errno == ERANGE || !std::isfinite(valor))
+            {
+                error = "Numero invalido o fuera de rango.";
+                return false;
+            }
+            salida.push_back(numero);
+            esperaOperando = false;
+            continue;
+        }
+
+        // Simple permite variables de una sola letra.
+        if (isalpha(c))
+        {
+            if (!esperaOperando) { error = "Falta operador antes de la variable."; return false; }
+            if (!islower(c)) { error = "Las variables deben estar en minusculas."; return false; }
+            if (i+1 < infija.size() && isalpha((unsigned char)infija[i+1]))
+            {
+                error = "Las variables deben tener una sola letra.";
+                return false;
+            }
+            salida.push_back(std::string(1, (char)c));
+            ++i;
+            esperaOperando = false;
+            continue;
+        }
+
+        if (esApertura((char)c))
+        {
+            if (!esperaOperando) { error = "Falta operador antes del agrupador."; return false; }
+            operadores.push_back(std::string(1, (char)c));
+            ++i;
+            continue;
+        }
+
+        if (esCierre((char)c))
+        {
+            if (esperaOperando) { error = "Agrupacion vacia o expresion incompleta."; return false; }
+            while (!operadores.empty() &&
+                   !(operadores.back().size() == 1 && esApertura(operadores.back()[0])))
+            {
+                salida.push_back(operadores.back() == "u-" ? "neg" :
+                                 operadores.back() == "u+" ? "pos" : operadores.back());
+                operadores.pop_back();
+            }
+            if (operadores.empty() || !coinciden(operadores.back()[0], (char)c))
+            {
+                error = "Agrupadores desbalanceados o de distinto tipo.";
+                return false;
+            }
+            operadores.pop_back();
+            ++i;
+            esperaOperando = false;
+            continue;
+        }
+
+        std::string op(1, (char)c);
+        if (!esOperadorInfijo(op))
+        {
+            error = "Simbolo no permitido: " + op;
+            return false;
+        }
+
+        if (esperaOperando)
+        {
+            if (op != "+" && op != "-")
+            {
+                error = "Falta operando antes de: " + op;
+                return false;
+            }
+            // Unario: no sacar operadores de la pila al insertarlo;
+            // asi tambien funciona 2 ^ -3.
+            operadores.push_back(op == "-" ? "u-" : "u+");
+            ++i;
+            continue;
+        }
+
+        while (!operadores.empty() && esOperadorInfijo(operadores.back()))
+        {
+            const std::string superior = operadores.back();
+            if (derechaAsociativo(op)
+                ? prioridadInfijo(op) < prioridadInfijo(superior)
+                : prioridadInfijo(op) <= prioridadInfijo(superior))
+            {
+                salida.push_back(superior == "u-" ? "neg" :
+                                 superior == "u+" ? "pos" : superior);
+                operadores.pop_back();
+            }
+            else break;
+        }
+        operadores.push_back(op);
+        esperaOperando = true;
+        ++i;
+    }
+
+    if (salida.empty() || esperaOperando)
+    {
+        error = "Expresion vacia o incompleta.";
+        return false;
+    }
+    while (!operadores.empty())
+    {
+        std::string op = operadores.back();
+        operadores.pop_back();
+        if (op.size() == 1 && esApertura(op[0]))
+        {
+            error = "Falta cerrar un agrupador.";
+            return false;
+        }
+        salida.push_back(op == "u-" ? "neg" : op == "u+" ? "pos" : op);
+    }
+
+    // Una sola separacion por espacios permite numeros completos.
+    for (size_t j = 0; j < salida.size(); ++j)
+    {
+        if (j) postfija += " ";
+        postfija += salida[j];
+    }
+    return true;
+}
+
+bool evaluarPostfijaExtendida(const std::string &postfija,
+                             double &resultado, std::string &error)
+{
+    resultado = 0.0;
+    error.clear();
+    std::istringstream lectura(postfija);
+    std::vector<double> pila;
+    std::string token;
+    while (lectura >> token)
+    {
+        if (token == "neg" || token == "pos")
+        {
+            if (pila.empty()) { error = "Falta operando unario."; return false; }
+            if (token == "neg") pila.back() = -pila.back();
+            continue;
+        }
+        if (token.size() == 1 && esOperadorInfijo(token))
+        {
+            if (pila.size() < 2) { error = "Faltan operandos."; return false; }
+            double b = pila.back(); pila.pop_back();
+            double a = pila.back(); pila.pop_back();
+            double r = 0.0;
+            if (token == "+") r = a + b;
+            else if (token == "-") r = a - b;
+            else if (token == "*") r = a * b;
+            else if (token == "/" || token == "%")
+            {
+                if (b == 0.0) { error = "Division o modulo entre cero."; return false; }
+                r = token == "/" ? a / b : fmod(a, b);
+            }
+            else if (token == "^")
+            {
+                errno = 0;
+                r = pow(a, b);
+                if (errno || !std::isfinite(r))
+                { error = "Potencia fuera de rango o indefinida."; return false; }
+            }
+            if (!std::isfinite(r)) { error = "Resultado fuera de rango."; return false; }
+            pila.push_back(r);
+            continue;
+        }
+
+        if (token.size() == 1 && isalpha((unsigned char)token[0]))
+        {
+            error = "La expresion contiene variables: se evalua en el compilador.";
+            return false;
+        }
+
+        char *fin = NULL;
+        errno = 0;
+        double numero = strtod(token.c_str(), &fin);
+        if (fin == token.c_str() || !fin || *fin != '\0' ||
+            errno == ERANGE || !std::isfinite(numero))
+        {
+            error = "Token no valido en postfijo: " + token;
+            return false;
+        }
+        pila.push_back(numero);
+    }
+    if (pila.size() != 1)
+    {
+        error = "Expresion postfija incompleta.";
+        return false;
+    }
+    resultado = pila.back();
+    return true;
+}
+
+void modoInfijo(void)
+{
+    char expresion[MAX_LINE];
+    printf("*** Conversor de infijo a postfijo ***\n");
+    printf("Ejemplo: 12 + 3 * (8 - 5)\n");
+    printf("Expresion infija: ");
+    fflush(stdout);
+    if (!leerLinea(expresion, sizeof(expresion)))
+    {
+        printf("No se pudo leer la expresion.\n");
+        return;
+    }
+
+    std::string postfija, error;
+    if (!convertirInfijaAPostfija(expresion, postfija, error))
+    {
+        printf("Error: %s\n", error.c_str());
+        return;
+    }
+    printf("Postfija: %s\n", postfija.c_str());
+
+    double resultado = 0.0;
+    if (evaluarPostfijaExtendida(postfija, resultado, error))
+    {
+        printf("Resultado: %.10g\n", resultado);
+    }
+    else if (error.find("variables") != std::string::npos)
+    {
+        printf("Conversion correcta. La evaluacion con variables se integrara al compilador.\n");
+    }
+    else
+    {
+        printf("Error al evaluar: %s\n", error.c_str());
     }
 }
 
